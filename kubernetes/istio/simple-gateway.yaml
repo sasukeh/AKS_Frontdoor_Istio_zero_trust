@@ -1,0 +1,64 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: frontend-gateway
+  namespace: default
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-vs
+  namespace: default
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - frontend-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/demo"
+    route:
+    - destination:
+        host: demo-app-service.frontdoor-demo.svc.cluster.local
+        port:
+          number: 80
+    headers:
+      request:
+        set:
+          X-Forwarded-Proto: "http"
+  - match:
+    - uri:
+        prefix: "/api"
+    route:
+    - destination:
+        host: backend
+        port:
+          number: 3000
+    headers:
+      request:
+        set:
+          X-Forwarded-Proto: "http"
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: demo-app-service.frontdoor-demo.svc.cluster.local
+        port:
+          number: 80
+    headers:
+      request:
+        set:
+          X-Forwarded-Proto: "http"

@@ -1,0 +1,48 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: frontend-gateway-fqdn
+  namespace: default
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "istio.internal.company.com"
+    - "app.vnet.local"
+    - "frontend.aks.azure"
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-vs-fqdn
+  namespace: default
+spec:
+  hosts:
+  - "istio.internal.company.com"
+  - "app.vnet.local" 
+  - "frontend.aks.azure"
+  gateways:
+  - frontend-gateway-fqdn
+  http:
+  - match:
+    - uri:
+        prefix: "/api"
+    route:
+    - destination:
+        host: backend
+        port:
+          number: 3000
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 80

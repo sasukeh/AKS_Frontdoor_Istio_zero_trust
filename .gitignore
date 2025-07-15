@@ -1,0 +1,135 @@
+# Terraform files (all directories)
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfstate.backup
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.log
+**/tfplan
+**/tfplan.*
+**/.terraform.tfstate.lock.info
+
+# Azure credentials and authentication
+.azure/
+**/azure-credentials.*
+**/service-principal.*
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.staging
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs (all locations)
+*.log
+**/*.log
+logs/
+**/logs/
+log/
+**/log/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Kubernetes generated files
+kubeconfig
+*.kubeconfig
+**/kubeconfig
+**/.kube/
+kube-config
+**/kube-config
+
+# Istio downloaded files
+istio-*/
+**/istio-*/
+
+# Cloud provider CLI cache and credentials
+# AWS
+.aws/
+**/.aws/
+
+# Google Cloud
+.gcloud/
+**/.gcloud/
+**/gcloud/
+
+# Azure (additional)
+**/azure-cli-output.json
+**/az-output.json
+
+# Helm cache
+.helm/
+**/.helm/
+
+# Docker
+.docker/
+**/.docker/
+
+# SSH keys and certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+ssh_host_*
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# Runtime and cache files
+cache/
+**/cache/
+.cache/
+**/.cache/
+*.pid
+*.lock
+*.socket
+
+# Backup files
+*.backup
+*.bak
+
+# Node.js (if any JavaScript tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Local File
+UPLOAD_CHECKLIST.md
+setup-github.sh

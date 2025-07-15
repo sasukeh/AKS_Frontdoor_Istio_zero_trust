@@ -1,0 +1,64 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: control-plane
+spec:
+  values:
+    global:
+      meshID: mesh1
+      multiCluster:
+        clusterName: aks-frontdoor-istio
+      network: network1
+    pilot:
+      env:
+        EXTERNAL_ISTIOD: false
+  components:
+    pilot:
+      k8s:
+        tolerations:
+        - key: "workload"
+          operator: "Equal"
+          value: "user"
+          effect: "NoSchedule"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2048Mi
+        hpaSpec:
+          maxReplicas: 5
+          minReplicas: 1
+          scaleTargetRef:
+            apiVersion: apps/v1
+            kind: Deployment
+            name: istiod
+          metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 80
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+      k8s:
+        tolerations:
+        - key: "workload"
+          operator: "Equal"
+          value: "user"
+          effect: "NoSchedule"
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1024Mi
+          limits:
+            cpu: 2000m
+            memory: 2048Mi
+        hpaSpec:
+          maxReplicas: 5
+          minReplicas: 2
+        service:
+          type: LoadBalancer
+        serviceAnnotations:
+          service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+          service.beta.kubernetes.io/azure-load-balancer-internal-subnet: "snet-aks"
