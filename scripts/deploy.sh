@@ -32,6 +32,45 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Usage information
+usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --force-cleanup    Force cleanup of existing resources without prompting"
+    echo "  --help, -h         Show this help message"
+    echo ""
+    echo "Environment Variables:"
+    echo "  FORCE_CLEANUP      Set to 'true' to force cleanup (same as --force-cleanup)"
+    echo ""
+    echo "Examples:"
+    echo "  $0                     # Normal deployment with prompts"
+    echo "  $0 --force-cleanup     # Force cleanup existing resources"
+    echo "  FORCE_CLEANUP=true $0  # Force cleanup using environment variable"
+    echo ""
+}
+
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --force-cleanup)
+                export FORCE_CLEANUP=true
+                shift
+                ;;
+            --help|-h)
+                usage
+                exit 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                usage
+                exit 1
+                ;;
+        esac
+    done
+}
+
 # Check if required tools are installed
 check_prerequisites() {
     log_info "Checking prerequisites..."
@@ -95,6 +134,42 @@ check_azure_login() {
     fi
 }
 
+# Clean up existing resources
+cleanup_existing_resources() {
+    log_info "Checking for existing resources..."
+    
+    # Check if resource group exists
+    if az group show --name "rg-frontdoor-istio-demo" &> /dev/null; then
+        log_warning "Found existing resource group: rg-frontdoor-istio-demo"
+        
+        # Ask user if they want to clean up
+        if [ "${FORCE_CLEANUP:-false}" = "true" ]; then
+            log_info "FORCE_CLEANUP is set to true. Proceeding with cleanup..."
+            cleanup_confirmed="y"
+        else
+            echo -n "Do you want to delete the existing resource group and all its resources? (y/N): "
+            read -r cleanup_confirmed
+        fi
+        
+        if [[ "$cleanup_confirmed" =~ ^[Yy]$ ]]; then
+            log_info "Deleting existing resource group and all resources..."
+            az group delete --name "rg-frontdoor-istio-demo" --yes --no-wait
+            
+            log_info "Waiting for resource group deletion to complete..."
+            while az group show --name "rg-frontdoor-istio-demo" &> /dev/null; do
+                log_info "Still deleting resources... waiting 30 seconds"
+                sleep 30
+            done
+            
+            log_success "Existing resources have been cleaned up"
+        else
+            log_info "Skipping cleanup. Will attempt to import existing resources."
+        fi
+    else
+        log_info "No existing resource group found. Proceeding with deployment."
+    fi
+}
+
 # Deploy infrastructure with Terraform
 deploy_infrastructure() {
     log_info "Deploying infrastructure with Terraform..."
@@ -118,6 +193,9 @@ deploy_infrastructure() {
     
     # Run plan with detailed output
     log_info "Analyzing current infrastructure state..."
+    
+    # Temporarily disable exit on error for terraform plan
+    set +e
     terraform plan \
         -out=tfplan \
         -detailed-exitcode \
@@ -126,9 +204,15 @@ deploy_infrastructure() {
         -no-color
     
     local plan_exit_code=$?
+    # Re-enable exit on error
+    set -e
+    
+    log_info "Terraform plan exit code: $plan_exit_code"
+    
     case $plan_exit_code in
         0)
             log_info "No changes needed - infrastructure is up to date"
+            log_info "Skipping terraform apply as no changes are required"
             ;;
         1)
             log_error "Terraform plan failed"
@@ -136,34 +220,82 @@ deploy_infrastructure() {
             ;;
         2)
             log_info "Changes detected - proceeding with deployment"
+            # Apply deployment
+            log_info "Applying Terraform deployment..."
+            log_info "This will create Azure resources and may take 10-15 minutes..."
+            
+            # Temporarily disable exit on error for terraform apply
+            set +e
+            terraform apply \
+                -auto-approve \
+                -parallelism=10 \
+                -no-color \
+                tfplan
+            
+            local apply_exit_code=$?
+            # Re-enable exit on error
+            set -e
+            
+            if [ $apply_exit_code -eq 0 ]; then
+                log_success "Terraform apply completed successfully"
+            elif [ $apply_exit_code -eq 1 ]; then
+                # Check if the error is due to existing resources
+                log_warning "Terraform apply failed. Checking if this is due to existing resources..."
+                
+                # Try to import existing resource group if it exists
+                if az group show --name "rg-frontdoor-istio-demo" &> /dev/null; then
+                    log_info "Found existing resource group. Attempting to import into Terraform state..."
+                    terraform import azurerm_resource_group.main "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/rg-frontdoor-istio-demo" || true
+                    
+                    # Retry terraform apply after import
+                    log_info "Retrying Terraform apply after import..."
+                    set +e
+                    terraform apply \
+                        -auto-approve \
+                        -parallelism=10 \
+                        -no-color \
+                        tfplan
+                    apply_exit_code=$?
+                    set -e
+                    
+                    if [ $apply_exit_code -eq 0 ]; then
+                        log_success "Terraform apply completed successfully after import"
+                    else
+                        log_error "Terraform apply still failed after import attempt. You may need to clean up existing resources manually."
+                        log_error "Consider running: az group delete --name rg-frontdoor-istio-demo --yes"
+                        exit 1
+                    fi
+                else
+                    log_error "Terraform apply failed with exit code: $apply_exit_code"
+                    exit 1
+                fi
+            else
+                log_error "Terraform apply failed with exit code: $apply_exit_code"
+                exit 1
+            fi
+            ;;
+        *)
+            log_error "Unexpected exit code from terraform plan: $plan_exit_code"
+            exit 1
             ;;
     esac
-    
-    # Apply deployment
-    log_info "Applying Terraform deployment..."
-    log_info "This will create Azure resources and may take 10-15 minutes..."
-    
-    # Apply with detailed progress
-    terraform apply \
-        -auto-approve \
-        -parallelism=10 \
-        -no-color \
-        tfplan
     
     # Disable detailed logging after deployment
     unset TF_LOG
     unset TF_LOG_PATH
     
-    # Get outputs
-    log_info "Getting Terraform outputs..."
-    RESOURCE_GROUP_NAME=$(terraform output -raw resource_group_name)
-    AKS_CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
-    FRONTDOOR_URL=$(terraform output -raw connection_info | jq -r '.frontdoor_url')
-    
-    log_success "Infrastructure deployment completed"
-    log_info "Resource Group: $RESOURCE_GROUP_NAME"
-    log_info "AKS Cluster: $AKS_CLUSTER_NAME"
-    log_info "Front Door URL: $FRONTDOOR_URL"
+    # Get outputs only if plan was applied
+    if [ $plan_exit_code -eq 2 ] || [ $plan_exit_code -eq 0 ]; then
+        log_info "Getting Terraform outputs..."
+        RESOURCE_GROUP_NAME=$(terraform output -raw resource_group_name)
+        AKS_CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
+        FRONTDOOR_URL=$(terraform output -raw connection_info | jq -r '.frontdoor_url')
+        
+        log_success "Infrastructure deployment completed"
+        log_info "Resource Group: $RESOURCE_GROUP_NAME"
+        log_info "AKS Cluster: $AKS_CLUSTER_NAME"
+        log_info "Front Door URL: $FRONTDOOR_URL"
+    fi
     
     cd "$PROJECT_ROOT"
 }
@@ -255,10 +387,20 @@ get_service_info() {
 main() {
     log_info "Starting deployment of Front Door + Istio + AKS..."
     
+    parse_args "$@"
     check_prerequisites
     load_env
     check_azure_login
+    cleanup_existing_resources
     deploy_infrastructure
+    
+    # Check if required variables are set
+    if [ -z "${RESOURCE_GROUP_NAME:-}" ] || [ -z "${AKS_CLUSTER_NAME:-}" ]; then
+        log_error "Required variables not set. RESOURCE_GROUP_NAME: ${RESOURCE_GROUP_NAME:-}, AKS_CLUSTER_NAME: ${AKS_CLUSTER_NAME:-}"
+        log_error "This might indicate that terraform outputs were not retrieved properly."
+        exit 1
+    fi
+    
     configure_kubectl
     wait_for_istio
     deploy_applications
@@ -272,5 +414,8 @@ main() {
 # Error handling
 trap 'log_error "Deployment failed at line $LINENO"' ERR
 
+# Parse command line arguments first
+parse_args "$@"
+
 # Run main function
-main "$@"
+main
