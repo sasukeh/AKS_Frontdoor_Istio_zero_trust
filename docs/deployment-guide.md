@@ -233,7 +233,7 @@ echo 'export PATH=$PATH:/usr/local/bin' >> ~/.zshrc
 ### 1.1 リポジトリクローン
 ```bash
 git clone git@github.com:sasukeh/AKS_Frontdoor_Istio_zero_trust.git
-cd frontdoor_istio
+cd AKS_Frontdoor_Istio_zero_trust
 ```
 
 ### 1.2 環境変数の設定
