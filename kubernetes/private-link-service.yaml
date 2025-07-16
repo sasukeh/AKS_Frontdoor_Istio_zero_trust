@@ -6,8 +6,8 @@ metadata:
   annotations:
     service.beta.kubernetes.io/azure-load-balancer-internal: "true"
     service.beta.kubernetes.io/azure-pls-create: "true"
-    service.beta.kubernetes.io/azure-pls-name: "frontdoor-istio-pls"
-    service.beta.kubernetes.io/azure-pls-ip-configuration-subnet: "snet-aks"
+    service.beta.kubernetes.io/azure-pls-name: "istio-gateway-pls"
+    service.beta.kubernetes.io/azure-pls-ip-configuration-subnet: "snet-private-endpoint"
     service.beta.kubernetes.io/azure-pls-proxy-protocol: "false"
     service.beta.kubernetes.io/azure-pls-visibility: "*"
     service.beta.kubernetes.io/azure-pls-auto-approval: "*"
@@ -19,6 +19,3 @@ spec:
   - port: 80
     targetPort: 8080
     name: http
-  - port: 443
-    targetPort: 8443
-    name: https

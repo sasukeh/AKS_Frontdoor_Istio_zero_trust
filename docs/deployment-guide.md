@@ -4,6 +4,16 @@
 
 このガイドでは、Azure Front Door + Istio + AKSアーキテクチャの詳細なデプロイメント手順を説明します。
 
+## ⚠️ 重要な事前注意事項
+
+### 実装済み問題の回避策
+1. **Private Link Service接続の手動承認が必須**
+2. **AKS Node Taintに対応したIstio設定が必要**  
+3. **Terraform Location変数の明示的指定が必要**
+4. **Load Balancer Frontend IP Configurationの自動生成パターン理解が必要**
+
+詳細は `.prompt.md` の「実装時の重要発見事項とノウハウ」セクションを参照してください。
+
 ## 前提条件
 
 ### 必要なツール

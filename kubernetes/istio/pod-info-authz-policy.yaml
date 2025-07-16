@@ -1,0 +1,20 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: pod-info-policy
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: pod-info
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/aks-istio-system/sa/istio-ingressgateway-service-account"]
+  - from:
+    - source:
+        namespaces: ["default"]
+  - to:
+    - operation:
+        methods: ["GET", "POST"]

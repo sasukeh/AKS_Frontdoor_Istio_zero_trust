@@ -50,9 +50,6 @@ spec:
           minReplicas: 2
         service:
           type: LoadBalancer
-          annotations:
-            service.beta.kubernetes.io/azure-load-balancer-internal: "true"
-            service.beta.kubernetes.io/azure-load-balancer-internal-subnet: "snet-aks"
         env:
           ISTIO_META_ROUTER_MODE: "sni-dnat"
     egressGateways:

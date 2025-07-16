@@ -63,9 +63,9 @@ module "aks" {
   # Node pool configuration
   default_node_pool = {
     name                = "system"
-    node_count         = 2
+    node_count         = 1
     vm_size           = "Standard_D2s_v3"
-    availability_zones = ["1", "2", "3"]
+    availability_zones = split(",", var.aks_availability_zones)
     max_pods          = 30
     os_disk_size_gb   = 30
   }
@@ -75,7 +75,7 @@ module "aks" {
       name                = "user"
       node_count         = var.aks_node_count
       vm_size           = var.aks_node_vm_size
-      availability_zones = ["1", "2", "3"]
+      availability_zones = split(",", var.aks_availability_zones)
       max_pods          = 50
       os_disk_size_gb   = 100
     }
@@ -108,6 +108,7 @@ module "frontdoor" {
   source = "./modules/frontdoor"
 
   resource_group_name    = azurerm_resource_group.main.name
+  location               = var.location
   frontdoor_profile_name = var.frontdoor_profile_name
   frontdoor_endpoint_name = var.frontdoor_endpoint_name
   custom_domain          = var.custom_domain

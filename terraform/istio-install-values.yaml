@@ -1,0 +1,41 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: control-plane
+spec:
+  # Components configuration
+  components:
+    pilot:
+      k8s:
+        tolerations:
+          - key: "workload"
+            operator: "Equal"
+            value: "user"
+            effect: "NoSchedule"
+        nodeSelector:
+          kubernetes.io/os: linux
+        env:
+          - name: EXTERNAL_ISTIOD
+            value: "false"
+    
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          tolerations:
+            - key: "workload"
+              operator: "Equal"
+              value: "user"
+              effect: "NoSchedule"
+          nodeSelector:
+            kubernetes.io/os: linux
+          serviceAnnotations:
+            service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+          service:
+            type: LoadBalancer
+  
+  # Global settings
+  values:
+    pilot:
+      env:
+        EXTERNAL_ISTIOD: false

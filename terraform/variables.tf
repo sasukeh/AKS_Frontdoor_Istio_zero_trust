@@ -88,6 +88,12 @@ variable "aks_node_vm_size" {
   default     = "Standard_D4s_v3"
 }
 
+variable "aks_availability_zones" {
+  description = "Availability zones for AKS nodes (comma-separated)"
+  type        = string
+  default     = "2,3"  # Default for Southeast Asia
+}
+
 # Azure Front Door Configuration
 variable "frontdoor_profile_name" {
   description = "Name of the Azure Front Door profile"

@@ -48,7 +48,7 @@ variable "default_node_pool" {
     name                = "system"
     node_count         = 2
     vm_size           = "Standard_D2s_v3"
-    availability_zones = ["1", "2", "3"]
+    availability_zones = ["2", "3"]
     max_pods          = 30
     os_disk_size_gb   = 30
   }

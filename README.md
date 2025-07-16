@@ -3,11 +3,30 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Terraform](https://img.shields.io/badge/Terraform-1.0+-blue.svg)](https://terraform.io)
 [![Azure](https://img.shields.io/badge/Azure-Ready-blue.svg)](https://azure.microsoft.com)
-[![Istio](https://img.shields.io/badge/Istio-1.19+-green.svg)](https://istio.io)
+[![Istio](https://img.shields.io/badge/Istio-1.26+-green.svg)](https://istio.io)
+
+> ✅ **2025年7月実装完了・動作確認済み**: すべてのコンポーネントが正常にデプロイされ、エンドツーエンドの接続テストが成功しています
 
 ## 🌟 概要
 
 このリポジトリは、**Azure Front Door** → **Private Link Service** → **Istio Gateway** → **Pod** の完全なセキュアトラフィックフローを実装したサンプルプロジェクトです。エンタープライズレベルのセキュリティとスケーラビリティを実現するための実践的なリファレンス実装を提供します。
+
+## 🎯 実装成功ポイント
+
+### ✅ 動作確認済み環境
+- **リージョン**: Southeast Asia
+- **Kubernetes**: v1.30.12 
+- **Istio**: v1.26.2 (セルフホスト)
+- **Front Door**: Premium SKU
+- **接続方式**: Private Link Service経由のHTTP/HTTPS
+
+### 🔧 重要な実装発見事項
+1. **Private Link Service接続の手動承認が必須** - Terraform適用後の手動操作が必要
+2. **AKS Node Taint対応** - Istio PodsのPending回避にtoleration設定が必須
+3. **Load Balancer Frontend IP自動生成パターン** - `{hash}-{subnet-name}` 形式
+4. **Terraform Location変数の明示的指定** - デフォルト値による不一致を回避
+
+詳細は [`.prompt.md`](./.prompt.md) および [`docs/troubleshooting.md`](./docs/troubleshooting.md) を参照してください。
 
 ## 🏗️ アーキテクチャ概要
 

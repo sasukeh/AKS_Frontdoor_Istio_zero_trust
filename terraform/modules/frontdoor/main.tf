@@ -68,9 +68,9 @@ resource "azurerm_cdn_frontdoor_origin_group" "main" {
   restore_traffic_time_to_healed_or_new_endpoint_in_minutes = 10
 
   health_probe {
-    interval_in_seconds = 30
-    path               = "/healthz"
-    protocol           = "Https"
+    interval_in_seconds = 120    # より長い間隔に変更
+    path               = "/"
+    protocol           = "Http"
     request_type       = "GET"
   }
 
@@ -81,48 +81,64 @@ resource "azurerm_cdn_frontdoor_origin_group" "main" {
   }
 }
 
-# Private Link Service for AKS connection
-# TODO: Configure after AKS cluster is created with load balancer
-# resource "azurerm_private_link_service" "aks" {
-#   name                = "pls-${var.frontdoor_profile_name}"
-#   location            = var.location
-#   resource_group_name = var.resource_group_name
+# Private Link Service for AKS connection - Istio IngressGateway
+# 
+# 重要な実装ノウハウ:
+# 1. load_balancer_frontend_ip_configuration_ids のパターン:
+#    AKSが自動生成する形式: {hash}-{subnet-name}
+#    例: ae6d9347ba463411288629847ed1ea38-snet-aks
+# 
+# 2. 手動承認が必須:
+#    Terraform apply後、以下のコマンドで接続を承認する必要がある:
+#    az network private-link-service connection update \
+#      -g <resource-group> --service-name <pls-name> \
+#      --name <connection-name> --connection-status Approved
 #
-#   nat_ip_configuration {
-#     name      = "primary"
-#     primary   = true
-#     subnet_id = var.pe_subnet_id
-#   }
+# 3. location変数の明示的指定が必須:
+#    メインモジュールでlocationパラメータを明示的に渡すこと
 #
-#   # This requires AKS load balancer to be created first
-#   load_balancer_frontend_ip_configuration_ids = [
-#     # Will be configured in phase 2
-#   ]
-#
-#   tags = var.tags
-# }
+resource "azurerm_private_link_service" "aks" {
+  name                = "pls-${var.frontdoor_profile_name}"
+  location            = var.location
+  resource_group_name = var.resource_group_name
 
-# Origin (AKS backend)
+  nat_ip_configuration {
+    name      = "primary"
+    primary   = true
+    subnet_id = var.pe_subnet_id
+  }
+
+  # This requires AKS load balancer to be created first
+  # パターン: /subscriptions/{sub}/resourceGroups/mc_{rg}_{cluster}_{location}/providers/Microsoft.Network/loadBalancers/kubernetes-internal/frontendIPConfigurations/{hash}-{subnet}
+  load_balancer_frontend_ip_configuration_ids = [
+    "/subscriptions/8f4244ad-7467-4361-a52e-57052eb23ca2/resourceGroups/mc_rg-frontdoor-istio-demo4_aks-frontdoor-istio_southeastasia/providers/Microsoft.Network/loadBalancers/kubernetes-internal/frontendIPConfigurations/ae6d9347ba463411288629847ed1ea38-snet-aks"
+  ]
+
+  tags = var.tags
+}
+
+# Origin (AKS backend) - Private Link Service経由で接続
 resource "azurerm_cdn_frontdoor_origin" "aks" {
-  name                          = "aks-origin"
+  name                          = "aks-origin-private"
   cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.main.id
   enabled                       = true
 
-  certificate_name_check_enabled = true
-  host_name                     = var.aks_cluster_fqdn
+  certificate_name_check_enabled = true   # Private Link使用時はtrueが必要
+  host_name                     = azurerm_private_link_service.aks.alias
+  origin_host_header           = azurerm_private_link_service.aks.alias  # Hostヘッダー設定
   http_port                     = 80
   https_port                    = 443
-  origin_host_header           = var.aks_cluster_fqdn
   priority                     = 1
   weight                       = 1000
 
-  # Temporarily use direct connection until Private Link is configured
-  # private_link {
-  #   request_message        = "Private link request from Front Door"
-  #   target_type           = "kubernetes_service"
-  #   location              = var.location
-  #   private_link_target_id = azurerm_private_link_service.aks.id
-  # }
+  # Private Link Service経由で接続（target_typeを削除）
+  private_link {
+    request_message        = "Front Door Private Link connection"
+    location              = azurerm_private_link_service.aks.location
+    private_link_target_id = azurerm_private_link_service.aks.id
+  }
+
+  depends_on = [azurerm_private_link_service.aks]
 }
 
 # Security Policy (WAF association)
@@ -145,7 +161,7 @@ resource "azurerm_cdn_frontdoor_security_policy" "main" {
   }
 }
 
-# Route
+# Route - Private Link Service経由接続
 resource "azurerm_cdn_frontdoor_route" "main" {
   name                          = "default-route"
   cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.main.id
@@ -153,10 +169,10 @@ resource "azurerm_cdn_frontdoor_route" "main" {
   cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.aks.id]
   enabled                       = true
 
-  forwarding_protocol    = "HttpsOnly"
-  https_redirect_enabled = true
+  forwarding_protocol    = "HttpOnly"          # HTTPでOriginにアクセス
+  https_redirect_enabled = true                # HTTPSリダイレクトを有効化
   patterns_to_match      = ["/*"]
-  supported_protocols    = ["Http", "Https"]
+  supported_protocols    = ["Http", "Https"]  # HTTPとHTTPSの両方をサポート
 
   cdn_frontdoor_custom_domain_ids = [] # Disabled for initial deployment
   link_to_default_domain         = true

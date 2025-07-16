@@ -60,13 +60,17 @@ resource "azurerm_kubernetes_cluster" "main" {
   #   azure_rbac_enabled = true
   # }
 
-  # Service mesh profile (Istio)
-  dynamic "service_mesh_profile" {
-    for_each = var.service_mesh_profile != null ? [var.service_mesh_profile] : []
-    content {
-      mode = service_mesh_profile.value.mode
-    }
-  }
+  # Service mesh profile (Istio) - DISABLED FOR ZERO TRUST
+  # Azure Managed Istio is disabled due to security requirements:
+  # - External gateways force public IP addresses
+  # - Gateway API is not supported
+  # - Self-hosted Istio will be used instead for zero trust compliance
+  # dynamic "service_mesh_profile" {
+  #   for_each = var.service_mesh_profile != null ? [var.service_mesh_profile] : []
+  #   content {
+  #     mode = service_mesh_profile.value.mode
+  #   }
+  # }
 
   # Monitoring
   oms_agent {

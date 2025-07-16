@@ -25,6 +25,8 @@ resource "azurerm_subnet" "private_endpoint" {
 
   # Disable private endpoint network policies
   private_endpoint_network_policies = "Disabled"
+  # Disable private link service network policies for Private Link Service creation
+  private_link_service_network_policies_enabled = false
 }
 
 # Network Security Group for AKS Subnet
@@ -121,6 +123,35 @@ resource "azurerm_network_security_group" "private_endpoint" {
   }
 
   tags = var.tags
+}
+
+# 一時的な公開アクセス用NSGルール（テスト後に削除予定）
+resource "azurerm_network_security_rule" "allow_http_test" {
+  name                        = "Allow-HTTP-Test"
+  priority                    = 300
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range          = "*"
+  destination_port_range     = "80"
+  source_address_prefix      = "*"  # 一時的に全ての送信元を許可
+  destination_address_prefix = "*"
+  resource_group_name        = var.resource_group_name  # 正しい変数参照
+  network_security_group_name = azurerm_network_security_group.aks.name
+}
+
+resource "azurerm_network_security_rule" "allow_https_test" {
+  name                        = "Allow-HTTPS-Test"
+  priority                    = 301
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range          = "*"
+  destination_port_range     = "443"
+  source_address_prefix      = "*"  # 一時的に全ての送信元を許可
+  destination_address_prefix = "*"
+  resource_group_name        = var.resource_group_name  # 正しい変数参照
+  network_security_group_name = azurerm_network_security_group.aks.name
 }
 
 # Associate NSG with AKS Subnet

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-info
+  labels:
+    app: pod-info
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pod-info
+  template:
+    metadata:
+      labels:
+        app: pod-info
+    spec:
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "user"
+        effect: "NoSchedule"
+      nodeSelector:
+        agentpool: user
+      containers:
+      - name: podinfo
+        image: stefanprodan/podinfo:6.7.0
+        ports:
+        - containerPort: 9898
+        env:
+        - name: PODINFO_UI_COLOR
+          value: "#34577c"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-info-service
+  labels:
+    app: pod-info
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9898
+    targetPort: 9898
+    protocol: TCP
+  selector:
+    app: pod-info

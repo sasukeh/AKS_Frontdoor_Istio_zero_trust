@@ -4,6 +4,142 @@
 
 このドキュメントでは、Azure Front Door + Istio + AKSアーキテクチャでよく発生する問題とその解決方法について説明します。
 
+## 🆕 2025年7月: 実装で発見された重要な問題と解決策
+
+### Critical Problem 1: Front Door 404エラー（Private Link Service接続未承認）
+
+**症状**: 
+- Front Doorエンドポイントへのアクセスで404 Not Foundが返される
+- インフラストラクチャは正常にデプロイされている
+- AKS内部からのアクセスは成功する
+
+**根本原因**: 
+Front DoorからPrivate Link Serviceへの接続が自動承認されず、Pending状態になっている
+
+**診断コマンド**:
+```bash
+# Private Link Service接続状況確認
+az network private-link-service show -g <resource-group> -n <pls-name> \
+  --query "privateEndpointConnections[].privateLinkServiceConnectionState" --output table
+
+# 期待される結果: Status が "Approved"
+# 問題がある場合: Status が "Pending"
+```
+
+**解決方法**:
+```bash
+# 1. 接続の詳細情報取得
+az network private-link-service show -g <resource-group> -n <pls-name> \
+  --query "privateEndpointConnections[].{name:name,status:privateLinkServiceConnectionState.status}" --output table
+
+# 2. 各接続を手動承認（すべてのPending接続に対して実行）
+az network private-link-service connection update \
+  -g <resource-group> \
+  --service-name <pls-name> \
+  --name <connection-name> \
+  --connection-status Approved \
+  --description "Approved Front Door connection"
+
+# 3. 承認後1-2分待ってからテスト
+curl -k https://<frontdoor-endpoint>
+```
+
+### Critical Problem 2: Istio Pods Pending（Node Taint未対応）
+
+**症状**:
+- `kubectl get pods -n istio-system` でPodがPending状態
+- Events に `0/2 nodes are available: 2 node(s) had untolerated taints`
+
+**根本原因**:
+AKSノードプールのTaint設定にIstio Podsが対応していない
+
+**診断コマンド**:
+```bash
+# ノードのTaint確認
+kubectl describe nodes | grep -A5 Taints
+
+# Istio Podの状態確認
+kubectl describe pod -n istio-system <istio-pod-name>
+```
+
+**解決方法**:
+Istio設定ファイル（`istio-install-config-fixed.yaml`）に適切なtolerationを追加:
+```yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  components:
+    pilot:
+      k8s:
+        tolerations:
+          - key: "workload"
+            operator: "Equal"
+            value: "user" 
+            effect: "NoSchedule"
+          - key: "CriticalAddonsOnly"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
+        nodeSelector:
+          agentpool: user
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          tolerations:
+            - key: "workload"
+              operator: "Equal"
+              value: "user"
+              effect: "NoSchedule"
+            - key: "CriticalAddonsOnly"  
+              operator: "Equal"
+              value: "true"
+              effect: "NoSchedule"
+          nodeSelector:
+            agentpool: user
+```
+
+### Critical Problem 3: Terraform Location Mismatch
+
+**症状**:
+```
+Error: InvalidResourceReference: Private link service cannot reference frontend ip configuration since it is already referenced
+```
+
+**根本原因**:
+- 変数のデフォルト値が実際のデプロイ先と異なる
+- "Japan East" vs "southeastasia" の不一致
+
+**解決方法**:
+```hcl
+# terraform/main.tf でlocationを明示的に渡す
+module "frontdoor" {
+  source = "./modules/frontdoor"
+  location = var.location  # この行を追加
+  # ...他のパラメータ
+}
+```
+
+### Critical Problem 4: Load Balancer Frontend IP Configuration 特定
+
+**症状**:
+Private Link ServiceでLoad BalancerのfrontendIPConfiguration IDが不明
+
+**解決パターン**:
+AKSが生成するフロントエンドIP設定名は以下のパターン:
+```
+{hash}-{subnet-name}
+```
+
+**確認方法**:
+```bash
+# Load Balancer確認
+kubectl get services -n istio-system istio-ingressgateway
+
+# Azure CLIで詳細確認  
+az network lb show -g MC_<resource-group>_<cluster-name>_<location> -n kubernetes-internal
+```
+
 ## デプロイメント関連の問題
 
 ### 1. Terraformデプロイメントエラー

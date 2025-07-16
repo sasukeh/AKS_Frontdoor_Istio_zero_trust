@@ -1,0 +1,44 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: pod-info-gateway
+  namespace: default
+spec:
+  selector:
+    istio: ingressgateway  # これはaks-istio-ingressネームスペースのlabelと一致する必要
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: pod-info-vs
+  namespace: default
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - pod-info-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: pod-info.default.svc.cluster.local  # 完全なFQDNを指定
+        port:
+          number: 80
+    headers:
+      response:
+        add:
+          X-Served-By: "Istio-Gateway"
+          X-Architecture: "FrontDoor-Istio-AKS"
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s

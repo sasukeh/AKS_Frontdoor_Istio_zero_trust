@@ -13,17 +13,7 @@ spec:
       protocol: HTTP
     hosts:
     - "*"
-    tls:
-      httpsRedirect: true
-  - port:
-      number: 443
-      name: https
-      protocol: HTTPS
-    tls:
-      mode: SIMPLE
-      credentialName: frontend-cert
-    hosts:
-    - "*"
+    # No HTTPS redirect for Azure Front Door HttpOnly protocol
 
 ---
 apiVersion: networking.istio.io/v1beta1
@@ -60,7 +50,7 @@ spec:
     - destination:
         host: frontend
         port:
-          number: 80
+          number: 9898
     headers:
       request:
         set:
